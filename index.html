@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="ja">
+<!--
+  ============================================================
+  MacBook 返済ノート v1
+  ============================================================
+  母から勇斗さんへの入金を記録するアプリ。
+
+  このファイル1枚に、アプリのすべてが入っています。
+  Webアプリは3つの言語でできています。
+
+    1. HTML ... 画面に「何を」置くか（骨組み）
+    2. CSS  ... それを「どう見せるか」（見た目）
+    3. JavaScript ... 「どう動くか」（頭脳）
+
+  このファイルは上から HTML → CSS(<style>の中) → JavaScript(<script>の中)
+  の順に並んでいます。読み方は LEARN.md を参照してください。
+  ============================================================
+-->
+<head>
+  <!-- 文字コードの指定。日本語を文字化けさせないためのお約束 -->
+  <meta charset="UTF-8">
+  <!-- スマホで開いたとき、画面幅にぴったり合わせる指定（これが無いと縮小表示される） -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MacBook 返済ノート</title>
+
+  <style>
+    /* ==========================================================
+       ここから CSS（見た目の指定）
+       「セレクタ { プロパティ: 値; }」という文法の繰り返しです。
+       例: body { margin: 0; } は「body要素の余白をゼロに」という意味。
+       ========================================================== */
+
+    /* 全要素の余白の計算方法を統一するお約束（最初のおまじない） */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* :root は「ページ全体」。--で始まるのは自分で決める色の変数 */
+    :root {
+      --bg: #f4f5f7;        /* 背景色 */
+      --card: #ffffff;      /* カードの色 */
+      --text: #1c1c1e;      /* 文字色 */
+      --sub: #6e6e73;       /* 薄い文字色 */
+      --accent: #0a84ff;    /* テーマ色（青） */
+      --green: #30a14e;     /* 完了・入金の緑 */
+      --line: #e5e5ea;      /* 罫線 */
+    }
+
+    body {
+      font-family: -apple-system, "Hiragino Sans", sans-serif; /* iPhone標準の書体 */
+      background: var(--bg);
+      color: var(--text);
+      /* 下のタブバーに内容が隠れないよう、下に余白を確保 */
+      padding-bottom: 76px;
+    }
+
+    /* ---- ヘッダー ---- */
+    header {
+      background: var(--card);
+      padding: 14px 16px 10px;
+      border-bottom: 1px solid var(--line);
+      position: sticky; top: 0;  /* スクロールしても上に固定 */
+    }
+    header h1 { font-size: 17px; }
+    header p  { font-size: 12px; color: var(--sub); }
+
+    /* ---- 画面（セクション）---- */
+    /* 4つの画面を全部書いておき、選ばれた1つ以外は hidden で隠す方式 */
+    section { padding: 16px; display: none; }
+    section.active { display: block; }
+
+    /* ---- カード（白い角丸の箱）---- */
+    .card {
+      background: var(--card);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 14px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .card h2 { font-size: 13px; color: var(--sub); font-weight: 600; margin-bottom: 8px; }
+
+    /* ---- ホーム画面の残高表示 ---- */
+    .balance { font-size: 34px; font-weight: 700; letter-spacing: -0.5px; }
+    .balance-sub { font-size: 13px; color: var(--sub); margin-top: 4px; }
+
+    /* 進捗バー。外側の灰色の棒の中で、内側の緑の棒の幅をJSで変える */
+    .bar { height: 10px; background: var(--line); border-radius: 5px; margin-top: 12px; overflow: hidden; }
+    .bar > div { height: 100%; background: var(--green); border-radius: 5px; transition: width .4s; }
+
+    /* ---- 今月カードの行 ---- */
+    .row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; font-size: 15px; }
+    .row + .row { border-top: 1px solid var(--line); }
+
+    /* 「済」「未」などの小さいラベル */
+    .tag { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 99px; }
+    .tag.done { background: #e3f6e9; color: var(--green); }
+    .tag.todo { background: #fdeaea; color: #d0342c; }
+    .tag.plan { background: #eef1f4; color: var(--sub); }
+
+    /* ---- 入力フォーム ---- */
+    label { display: block; font-size: 13px; color: var(--sub); margin: 10px 0 4px; }
+    input, textarea {
+      width: 100%;
+      font-size: 16px;  /* 16px未満だとiPhoneが入力時に勝手にズームするので16pxにする */
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fafafa;
+    }
+    button.primary {
+      width: 100%;
+      margin-top: 14px;
+      padding: 13px;
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+      background: var(--accent);
+      border: none;
+      border-radius: 12px;
+    }
+    button.primary:active { opacity: 0.7; } /* 押した瞬間ちょっと薄くする（押した感） */
+
+    /* ---- 入金ログの1行 ---- */
+    .log-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+    .log-item:last-child { border-bottom: none; }
+    .log-date { font-size: 12px; color: var(--sub); }
+    .log-amount { font-size: 17px; font-weight: 700; color: var(--green); }
+    .log-memo { font-size: 12px; color: var(--sub); }
+    .log-del { background: none; border: none; color: #d0342c; font-size: 12px; padding: 6px; }
+
+    /* ---- 予定表のテーブル ---- */
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; color: var(--sub); font-weight: 600; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+    td { padding: 8px 4px; border-bottom: 1px solid var(--line); }
+    tr.past td { color: var(--sub); }
+
+    /* ---- 下のタブバー ---- */
+    nav {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      display: flex;
+      background: var(--card);
+      border-top: 1px solid var(--line);
+      padding-bottom: env(safe-area-inset-bottom); /* iPhoneの下の黒いバーを避ける */
+    }
+    nav button {
+      flex: 1;                 /* 4つのボタンで幅を等分 */
+      padding: 10px 0 8px;
+      background: none; border: none;
+      font-size: 11px; color: var(--sub);
+    }
+    nav button .icon { display: block; font-size: 20px; margin-bottom: 2px; }
+    nav button.active { color: var(--accent); font-weight: 600; }
+
+    /* ---- 閲覧モード（母向け）の帯 ---- */
+    #viewBanner {
+      display: none;
+      background: #fff4d6; color: #8a6d1a;
+      font-size: 13px; text-align: center; padding: 8px;
+    }
+    /* body に readonly クラスが付いたら、編集系の部品をまとめて隠す */
+    body.readonly .edit-only { display: none; }
+  </style>
+</head>
+
+<body>
+  <!-- ==========================================================
+       ここから HTML（画面の骨組み）
+       id="○○" は、後でJavaScriptから「この部品」と名指しするための名前です。
+       ========================================================== -->
+
+  <!-- 母向けの閲覧モードで表示される帯（普段は隠れている） -->
+  <div id="viewBanner">閲覧モードです（勇斗さんが共有した時点の記録）</div>
+
+  <header>
+    <h1>MacBook 返済ノート</h1>
+    <p>総額 362,600円（頭金 92,600円＋Paidy 24回払い 270,000円）</p>
+  </header>
+
+  <!-- ======== 画面1: ホーム ======== -->
+  <section id="page-home" class="active">
+    <div class="card">
+      <h2>あと受け取る金額</h2>
+      <div class="balance" id="balanceText">---</div>
+      <div class="balance-sub" id="paidText">---</div>
+      <div class="bar"><div id="barFill" style="width:0%"></div></div>
+    </div>
+
+    <div class="card">
+      <h2>今月の状況</h2>
+      <div class="row">
+        <span id="paidyThisMonthLabel">Paidy引き落とし</span>
+        <span id="paidyThisMonthTag" class="tag plan">---</span>
+      </div>
+      <div class="row">
+        <span>お母さんからの入金</span>
+        <span id="momThisMonthTag" class="tag plan">---</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>完済ペース予測</h2>
+      <div id="paceText" style="font-size:14px; line-height:1.7;">---</div>
+    </div>
+  </section>
+
+  <!-- ======== 画面2: 入金ログ ======== -->
+  <section id="page-log">
+    <!-- 入力フォーム（閲覧モードでは edit-only ごと隠れる） -->
+    <div class="card edit-only">
+      <h2>入金を記録する</h2>
+      <label for="inDate">日付</label>
+      <input type="date" id="inDate">
+      <label for="inAmount">金額（円）</label>
+      <input type="number" id="inAmount" placeholder="例: 11250" inputmode="numeric">
+      <label for="inMemo">メモ（任意）</label>
+      <input type="text" id="inMemo" placeholder="例: 7月分、現金手渡し">
+      <button class="primary" id="addBtn">記録する</button>
+    </div>
+
+    <div class="card">
+      <h2>入金の履歴（新しい順）</h2>
+      <div id="logList">まだ記録がありません</div>
+    </div>
+  </section>
+
+  <!-- ======== 画面3: Paidy予定表 ======== -->
+  <section id="page-plan">
+    <div class="card">
+      <h2>Paidy引き落とし予定（毎月25日・僕の口座から）</h2>
+      <table>
+        <thead>
+          <tr><th>回</th><th>日付</th><th>金額</th><th>累計</th><th>状況</th></tr>
+        </thead>
+        <!-- 24行ぶんはJavaScriptが自動で作って、ここに流し込む -->
+        <tbody id="planBody"></tbody>
+      </table>
+      <p style="font-size:12px; color:var(--sub); margin-top:10px;">
+        ※この表は「僕→Paidy」の固定スケジュール。お母さんの入金ペースはこれと違ってOK（多くても少なくても、最終的に総額が揃えばよい）。
+      </p>
+    </div>
+  </section>
+
+  <!-- ======== 画面4: データ ======== -->
+  <section id="page-data">
+    <div class="card edit-only">
+      <h2>お母さんに共有する</h2>
+      <p style="font-size:13px; color:var(--sub); line-height:1.7;">
+        今の記録を埋め込んだリンクを作ってコピーします。LINEで送れば、お母さんは開くだけで残高と履歴を見られます（相手は閲覧のみ）。
+        リンクを受け取った人だけが、その時点の記録を見られます。
+      </p>
+      <button class="primary" id="shareBtn">共有リンクをコピー</button>
+    </div>
+
+    <div class="card edit-only">
+      <h2>バックアップ</h2>
+      <p style="font-size:13px; color:var(--sub); line-height:1.7;">
+        記録はこの端末のブラウザの中（localStorage）にだけ保存されています。
+        念のため、ときどきファイルに書き出して保管してください。
+      </p>
+      <button class="primary" id="exportBtn" style="background:var(--green);">記録をファイルに書き出す</button>
+      <label for="importFile" style="margin-top:14px;">書き出したファイルから復元する</label>
+      <input type="file" id="importFile" accept=".json">
+    </div>
+  </section>
+
+  <!-- ======== 下のタブバー ======== -->
+  <nav>
+    <!-- data-page はボタンに持たせたメモ。押されたらJSがこれを読んで画面を切り替える -->
+    <button class="active" data-page="home"><span class="icon">🏠</span>ホーム</button>
+    <button data-page="log"><span class="icon">📝</span>ログ</button>
+    <button data-page="plan"><span class="icon">📅</span>予定表</button>
+    <button data-page="data"><span class="icon">⚙️</span>データ</button>
+  </nav>
+
+  <script>
+    /* ==========================================================
+       ここから JavaScript（アプリの頭脳）
+
+       流れは大きく3つだけです。
+         A. データを覚える・保存する（loadData / saveData）
+         B. データから画面を作り直す（render）
+         C. ボタンが押されたらデータを変えて、renderをやり直す
+
+       「データを変える → renderで全部描き直す」を繰り返すのが
+       このアプリの基本サイクルです。
+       ========================================================== */
+
+    /* ---- 【1】固定の設定値 ----
+       const は「あとから変えない値」を入れる箱。
+       金額の前提はここに一箇所だけ書いておくと、間違いが起きません。 */
+    const TOTAL = 362600;              // 母から最終的に受け取る総額
+    const DOWN_PAYMENT = 92600;        // 購入日に支払った頭金（参考情報）
+    const PAIDY_MONTHLY = 11250;       // Paidy毎月の引き落とし額（270,000 ÷ 24）
+    const PAIDY_COUNT = 24;            // 回数
+    const PAIDY_START = { year: 2026, month: 7, day: 25 }; // 第1回の引き落とし日
+    const STORAGE_KEY = "macbook-repay-v1"; // localStorageの保存名
+
+    /* ---- 【2】アプリの状態 ----
+       payments が「母からの入金」の一覧。1件 = 1つのオブジェクト（メモの束）で、
+       { date: "2026-07-25", amount: 11250, memo: "7月分" } のような形。
+       readonly は母向け閲覧モードかどうかの旗。 */
+    let payments = [];
+    let readonly = false;
+
+    /* ---- 【3】保存と読み込み ----
+       localStorage はブラウザに付いている小さな金庫。文字列しか入らないので、
+       JSON.stringify で「データ→文字列」、JSON.parse で「文字列→データ」に変換します。 */
+    function saveData() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payments));
+    }
+    function loadData() {
+      const text = localStorage.getItem(STORAGE_KEY);
+      // まだ一度も保存していなければ null が返るので、その場合は空のままにする
+      if (text) payments = JSON.parse(text);
+    }
+
+    /* ---- 【4】小さな道具（関数）たち ---- */
+
+    // 金額を「11,250円」の形の文字列にする
+    function yen(n) {
+      return n.toLocaleString("ja-JP") + "円";
+    }
+
+    // 今日の日付を "2026-07-20" 形式の文字列で返す
+    function todayStr() {
+      const d = new Date();
+      // 月は0始まり(0=1月)なので+1する。padStartは「7」を「07」にする
+      return d.getFullYear() + "-" +
+             String(d.getMonth() + 1).padStart(2, "0") + "-" +
+             String(d.getDate()).padStart(2, "0");
+    }
+
+    // Paidyの第n回（1〜24）の引き落とし日を "YYYY-MM-DD" で返す
+    function paidyDate(n) {
+      // 2026年7月を起点に、月を(n-1)個進める。12を超えたら年に繰り上げる計算
+      const totalMonths = (PAIDY_START.year * 12 + (PAIDY_START.month - 1)) + (n - 1);
+      const y = Math.floor(totalMonths / 12);
+      const m = (totalMonths % 12) + 1;
+      return y + "-" + String(m).padStart(2, "0") + "-" + String(PAIDY_START.day).padStart(2, "0");
+    }
+
+    // 入金の合計額を計算する。reduceは「配列を1つの値にたたむ」道具
+    function totalPaid() {
+      return payments.reduce((sum, p) => sum + p.amount, 0);
+    }
+
+    /* ---- 【5】画面を作り直す render ----
+       データ(payments)を読んで、画面の各部品の中身を書き換えます。
+       document.getElementById("名前") で HTML の部品をつかまえて、
+       .textContent（文字）や .innerHTML（HTMLごと）を差し替えます。 */
+    function render() {
+      const paid = totalPaid();
+      const remaining = TOTAL - paid;
+      const percent = Math.min(100, Math.round(paid / TOTAL * 100));
+      const today = todayStr(); // 文字列同士でも "2026-07-20" 形式なら大小比較で日付比較になる
+
+      /* --- ホーム: 残高と進捗バー --- */
+      document.getElementById("balanceText").textContent = yen(Math.max(0, remaining));
+      document.getElementById("paidText").textContent =
+        "受け取り済み " + yen(paid) + " ／ " + TOTAL.toLocaleString("ja-JP") + "円（" + percent + "%）";
+      document.getElementById("barFill").style.width = percent + "%";
+
+      /* --- ホーム: 今月の状況 --- */
+      const thisMonth = today.slice(0, 7); // "2026-07" の部分だけ取り出す
+
+      // 今月のPaidy引き落とし: 24回の予定日の中に今月の日付があるか探す
+      let paidyRow = null;
+      for (let n = 1; n <= PAIDY_COUNT; n++) {
+        if (paidyDate(n).slice(0, 7) === thisMonth) { paidyRow = paidyDate(n); break; }
+      }
+      const pTag = document.getElementById("paidyThisMonthTag");
+      const pLabel = document.getElementById("paidyThisMonthLabel");
+      if (paidyRow) {
+        pLabel.textContent = "Paidy引き落とし（" + paidyRow.slice(5).replace("-", "/") + "・" + yen(PAIDY_MONTHLY) + "）";
+        const done = today >= paidyRow;
+        pTag.textContent = done ? "済" : "これから";
+        pTag.className = "tag " + (done ? "done" : "todo");
+      } else {
+        pLabel.textContent = "Paidy引き落とし";
+        pTag.textContent = "今月なし";
+        pTag.className = "tag plan";
+      }
+
+      // 今月の母からの入金: ログの中に今月の日付があるか
+      const momPaidThisMonth = payments.some(p => p.date.slice(0, 7) === thisMonth);
+      const mTag = document.getElementById("momThisMonthTag");
+      mTag.textContent = momPaidThisMonth ? "あり" : "まだ";
+      mTag.className = "tag " + (momPaidThisMonth ? "done" : "todo");
+
+      /* --- ホーム: 完済ペース予測 --- */
+      const paceEl = document.getElementById("paceText");
+      if (paid <= 0) {
+        paceEl.textContent = "まだ入金がありません。参考: 月11,250円ペースなら完済は2029年3月ごろ、月15,000円なら2028年7月ごろです。";
+      } else if (remaining <= 0) {
+        paceEl.textContent = "🎉 完済しました！総額 " + yen(TOTAL) + " を受け取り済みです。";
+      } else {
+        // 返済開始(2026年7月)から今月までの経過月数。最低1にして0で割るのを防ぐ
+        const startIdx = 2026 * 12 + 6; // 2026年7月を通し番号にしたもの
+        const nowIdx = Number(today.slice(0, 4)) * 12 + (Number(today.slice(5, 7)) - 1);
+        const monthsElapsed = Math.max(1, nowIdx - startIdx + 1);
+        const avg = paid / monthsElapsed;                    // 月平均の入金額
+        const monthsLeft = Math.ceil(remaining / avg);       // 残りに必要な月数（切り上げ）
+        const finishIdx = nowIdx + monthsLeft;
+        const finishY = Math.floor(finishIdx / 12);
+        const finishM = (finishIdx % 12) + 1;
+        paceEl.innerHTML =
+          "これまでの平均は <b>月あたり " + yen(Math.round(avg)) + "</b>。<br>" +
+          "このペースだと完済は <b>" + finishY + "年" + finishM + "月ごろ</b>の見込みです。<br>" +
+          "<span style='color:var(--sub); font-size:12px;'>※多く払えば早まり、少なければ延びるだけ。期限はありません。</span>";
+      }
+
+      /* --- ログ画面: 履歴一覧 --- */
+      const logEl = document.getElementById("logList");
+      if (payments.length === 0) {
+        logEl.textContent = "まだ記録がありません";
+      } else {
+        // sortで日付の新しい順に並べ替え。sliceは元の配列を壊さないためのコピー
+        const sorted = payments.slice().sort((a, b) => b.date.localeCompare(a.date));
+        // map で「1件のデータ → 1行ぶんのHTML文字列」に変換し、joinで全部つなげる
+        logEl.innerHTML = sorted.map(p => `
+          <div class="log-item">
+            <div>
+              <div class="log-date">${p.date.replace(/-/g, "/")}</div>
+              <div class="log-memo">${escapeHtml(p.memo || "")}</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span class="log-amount">+${p.amount.toLocaleString("ja-JP")}円</span>
+              <button class="log-del edit-only" data-id="${p.id}">削除</button>
+            </div>
+          </div>`).join("");
+      }
+
+      /* --- 予定表画面: Paidy 24回のテーブル --- */
+      let rows = "";
+      let cumulative = 0;
+      for (let n = 1; n <= PAIDY_COUNT; n++) {
+        const d = paidyDate(n);
+        cumulative += PAIDY_MONTHLY;
+        const done = today >= d;
+        rows += `
+          <tr class="${done ? "past" : ""}">
+            <td>${n}</td>
+            <td>${d.replace(/-/g, "/")}</td>
+            <td>${PAIDY_MONTHLY.toLocaleString("ja-JP")}</td>
+            <td>${cumulative.toLocaleString("ja-JP")}</td>
+            <td><span class="tag ${done ? "done" : "plan"}">${done ? "済" : "予定"}</span></td>
+          </tr>`;
+      }
+      document.getElementById("planBody").innerHTML = rows;
+    }
+
+    /* メモ欄に < や > が入ってもHTMLとして誤解釈されないようにする安全装置。
+       画面に「人が入力した文字」を出すときは必ずこれを通すのがWebの基本ルール */
+    function escapeHtml(s) {
+      return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    /* ---- 【6】操作（イベント）----
+       addEventListener は「この部品でこの出来事が起きたら、この関数を実行して」
+       という予約。クリック、入力、ファイル選択などに反応できます。 */
+
+    // タブバー: 押されたボタンの data-page を読んで画面を切り替える
+    document.querySelectorAll("nav button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll("section").forEach(s => s.classList.remove("active"));
+        document.getElementById("page-" + btn.dataset.page).classList.add("active");
+        document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+      });
+    });
+
+    // 「記録する」ボタン: 入力欄から値を集めて payments に追加 → 保存 → 描き直し
+    document.getElementById("addBtn").addEventListener("click", () => {
+      const date = document.getElementById("inDate").value;
+      const amount = Number(document.getElementById("inAmount").value);
+      const memo = document.getElementById("inMemo").value.trim();
+
+      // 入力チェック。おかしい値は保存しない
+      if (!date) { alert("日付を入れてください"); return; }
+      if (!amount || amount <= 0) { alert("金額を1円以上で入れてください"); return; }
+
+      payments.push({
+        id: Date.now(),  // 現在時刻(ミリ秒)をそのままIDに使う。同時に2件は作れないので重複しない
+        date: date,
+        amount: amount,
+        memo: memo
+      });
+      saveData();
+      render();
+
+      // 入力欄を空に戻して、ログ画面はそのまま見せる
+      document.getElementById("inAmount").value = "";
+      document.getElementById("inMemo").value = "";
+    });
+
+    // 削除ボタン: ログの一覧はrenderのたびに作り直されるので、
+    // 親要素(logList)で1回だけ聞き耳を立て、押されたのが削除ボタンなら反応する方式
+    document.getElementById("logList").addEventListener("click", (e) => {
+      if (!e.target.classList.contains("log-del")) return;
+      if (!confirm("この記録を削除しますか？")) return;
+      const id = Number(e.target.dataset.id);
+      payments = payments.filter(p => p.id !== id); // 該当ID以外を残す＝削除
+      saveData();
+      render();
+    });
+
+    // 書き出し: データをJSONファイルにしてダウンロードさせる
+    document.getElementById("exportBtn").addEventListener("click", () => {
+      const blob = new Blob([JSON.stringify(payments, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "macbook-repay-" + todayStr() + ".json";
+      a.click();
+    });
+
+    // 復元: 選ばれたファイルを読んで payments に戻す
+    document.getElementById("importFile").addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          if (!Array.isArray(data)) throw new Error();
+          payments = data;
+          saveData();
+          render();
+          alert("復元しました（" + payments.length + "件）");
+        } catch {
+          alert("このファイルは読み込めませんでした");
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    // 共有リンク: データを文字列化 → Base64（URLに入れられる形）にしてURLの#以降に埋め込む
+    document.getElementById("shareBtn").addEventListener("click", () => {
+      const json = JSON.stringify(payments);
+      // 日本語を含む文字列をBase64にするための定番の変換
+      const encoded = btoa(unescape(encodeURIComponent(json)));
+      const url = location.origin + location.pathname + "#data=" + encoded;
+      navigator.clipboard.writeText(url).then(() => {
+        alert("リンクをコピーしました。LINEなどで貼り付けて送ってください。");
+      });
+    });
+
+    /* ---- 【7】起動処理 ----
+       ページが開かれた瞬間に1回だけ走る部分。 */
+
+    // URLの#以降に data= があれば、母向けの閲覧モードで開く
+    if (location.hash.startsWith("#data=")) {
+      try {
+        const encoded = location.hash.slice(6); // "#data=" の6文字を取り除く
+        const json = decodeURIComponent(escape(atob(encoded))); // Base64を元の文字列に戻す
+        payments = JSON.parse(json);
+        readonly = true;
+        document.body.classList.add("readonly");       // 編集系の部品を全部隠す
+        document.getElementById("viewBanner").style.display = "block";
+      } catch {
+        // リンクが壊れていたら、普通モードで開き直す
+        loadData();
+      }
+    } else {
+      loadData(); // 普段はこちら。前回までの記録を金庫から取り出す
+    }
+
+    // 日付入力の初期値を今日にしておく（毎回選ぶ手間を省く）
+    document.getElementById("inDate").value = todayStr();
+
+    // 最初の描画
+    render();
+  </script>
+</body>
+</html>
