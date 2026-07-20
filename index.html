@@ -24,6 +24,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MacBook 返済ノート</title>
 
+  <!-- ここからPWA（ホーム画面に置ける本格アプリ化）のための宣言 -->
+  <!-- マニフェスト: アプリ名・アイコン・表示方法をまとめた説明書ファイル -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <!-- iPhoneのホーム画面用アイコン -->
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <!-- ホーム画面から起動したとき、Safariの枠を消して全画面のアプリとして表示する -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="返済ノート">
+  <!-- ブラウザの上部バーの色をテーマ色に合わせる -->
+  <meta name="theme-color" content="#0a84ff">
+
   <style>
     /* ==========================================================
        ここから CSS（見た目の指定）
@@ -225,7 +237,7 @@
   <!-- ======== 画面3: Paidy予定表 ======== -->
   <section id="page-plan">
     <div class="card">
-      <h2>Paidy引き落とし予定（毎月25日・僕の口座から）</h2>
+      <h2>Paidy引き落とし予定（毎月27日・僕の口座から）</h2>
       <table>
         <thead>
           <tr><th>回</th><th>日付</th><th>金額</th><th>累計</th><th>状況</th></tr>
@@ -291,12 +303,12 @@
     const DOWN_PAYMENT = 92600;        // 購入日に支払った頭金（参考情報）
     const PAIDY_MONTHLY = 11250;       // Paidy毎月の引き落とし額（270,000 ÷ 24）
     const PAIDY_COUNT = 24;            // 回数
-    const PAIDY_START = { year: 2026, month: 7, day: 25 }; // 第1回の引き落とし日
+    const PAIDY_START = { year: 2026, month: 7, day: 27 }; // 第1回の引き落とし日
     const STORAGE_KEY = "macbook-repay-v1"; // localStorageの保存名
 
     /* ---- 【2】アプリの状態 ----
        payments が「母からの入金」の一覧。1件 = 1つのオブジェクト（メモの束）で、
-       { date: "2026-07-25", amount: 11250, memo: "7月分" } のような形。
+       { date: "2026-07-27", amount: 11250, memo: "7月分" } のような形。
        readonly は母向け閲覧モードかどうかの旗。 */
     let payments = [];
     let readonly = false;
@@ -568,6 +580,12 @@
 
     // 最初の描画
     render();
+
+    // サービスワーカー（オフライン対応の係。中身は sw.js）を登録する。
+    // Webサーバー経由(https)のときだけ動く仕組みなので、ローカルファイルで開いたときは何もしない
+    if ("serviceWorker" in navigator && location.protocol === "https:") {
+      navigator.serviceWorker.register("./sw.js");
+    }
   </script>
 </body>
 </html>
