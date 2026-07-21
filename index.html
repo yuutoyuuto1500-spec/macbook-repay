@@ -272,6 +272,11 @@
       <h2>家族で共同記録</h2>
       <p id="familyStatus" style="font-size:13px; color:var(--sub); line-height:1.7;">---</p>
       <button class="primary" id="familyShareBtn">家族共有リンクをコピー</button>
+      <!-- iPhoneの「ホーム画面に追加」したアプリはSafariと保存場所が別なので、
+           リンクをSafariで開くだけでは部屋に入れない。ここに貼り付けて参加する -->
+      <label for="joinInput" style="margin-top:14px;">受け取った家族共有リンクで参加する（ホーム画面のアプリはこちらに貼り付け）</label>
+      <input type="text" id="joinInput" placeholder="ここにリンクを貼り付け">
+      <button class="primary" id="joinBtn" style="background:var(--green); margin-top:10px;">この部屋に参加</button>
     </div>
 
     <div class="card edit-only">
@@ -774,6 +779,16 @@
       navigator.clipboard.writeText(url).then(() => {
         alert("家族共有リンクをコピーしました。\nこのリンクを知っている人は記録の閲覧と書き込みの両方ができます。家族以外に送らないでください。");
       });
+    });
+
+    // 「この部屋に参加」ボタン: 貼り付けられたリンクから合言葉を取り出して保存し、開き直す。
+    // 参加後はクラウド側（部屋）の記録がこの端末に反映される
+    document.getElementById("joinBtn").addEventListener("click", () => {
+      const text = document.getElementById("joinInput").value.trim();
+      const m = text.match(/room=([0-9a-f]{16,64})/) || text.match(/^([0-9a-f]{16,64})$/);
+      if (!m) { alert("リンクを読み取れませんでした。「家族共有リンク」を丸ごと貼り付けてください"); return; }
+      localStorage.setItem(STORAGE_KEY + "-room", m[1]);
+      location.reload(); // 新しい部屋で開き直す
     });
 
     // 起動時: 部屋の合言葉を「リンク(#room=) → この端末の控え」の順で探す
