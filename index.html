@@ -222,7 +222,7 @@
       <label for="inDate">日付</label>
       <input type="date" id="inDate">
       <label for="inAmount">金額（円）</label>
-      <input type="number" id="inAmount" placeholder="例: 11250" inputmode="numeric">
+      <input type="number" id="inAmount" placeholder="例: 15000" inputmode="numeric">
       <label for="inMemo">メモ（任意）</label>
       <input type="text" id="inMemo" placeholder="例: 7月分、現金手渡し">
       <button class="primary" id="addBtn">記録する</button>
@@ -267,8 +267,15 @@
 
   <!-- ======== 画面4: データ ======== -->
   <section id="page-data">
+    <!-- v4: 家族で共同記録。クラウド設定(CLOUD_FIREBASE_CONFIG)が入るまでは非表示 -->
+    <div class="card edit-only" id="familyCard" style="display:none;">
+      <h2>家族で共同記録</h2>
+      <p id="familyStatus" style="font-size:13px; color:var(--sub); line-height:1.7;">---</p>
+      <button class="primary" id="familyShareBtn">家族共有リンクをコピー</button>
+    </div>
+
     <div class="card edit-only">
-      <h2>お母さんに共有する</h2>
+      <h2>お母さんに共有する（閲覧のみ）</h2>
       <p style="font-size:13px; color:var(--sub); line-height:1.7;">
         今の記録を埋め込んだリンクを作ってコピーします。LINEで送れば、お母さんは開くだけで残高と履歴を見られます（相手は閲覧のみ）。
         リンクを受け取った人だけが、その時点の記録を見られます。
@@ -341,6 +348,7 @@
        JSON.stringify で「データ→文字列」、JSON.parse で「文字列→データ」に変換します。 */
     function saveData() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payments));
+      if (cloudReady) pushCloud(); // v4: クラウド同期が動いていれば部屋にも反映する
     }
     function loadData() {
       const text = localStorage.getItem(STORAGE_KEY);
@@ -683,6 +691,101 @@
     // Webサーバー経由(https)のときだけ動く仕組みなので、ローカルファイルで開いたときは何もしない
     if ("serviceWorker" in navigator && location.protocol === "https:") {
       navigator.serviceWorker.register("./sw.js");
+    }
+
+    /* ==========================================================
+       【8】v4: 家族で共同記録（クラウド同期）
+
+       仕組み: Firebase（Googleのデータ置き場サービス）に「部屋」を1つ作り、
+       部屋の合言葉（ルームID）を知っている家族だけが同じ記録を読み書きする。
+       合言葉は推測不可能な長いランダム文字列で、これが実質のパスワード。
+
+       下の CLOUD_FIREBASE_CONFIG が null のあいだは、この節は何もしない
+       （今まで通りの端末内保存のみで動く）。設定手順は V4-SETUP.md 参照。
+       ========================================================== */
+    const CLOUD_FIREBASE_CONFIG = null; // Firebaseプロジェクト作成後、ここに設定を貼る
+
+    let roomId = null;      // 参加中の部屋の合言葉
+    let cloudReady = false; // 同期が動いているかの旗
+    let fsTools = null;     // Firestore（データベース）の道具箱。読み込み後に入る
+    let roomRef = null;     // 自分たちの部屋を指し示す住所
+
+    // 推測不可能な合言葉を作る（暗号品質の乱数で32文字）
+    function makeRoomId() {
+      const bytes = crypto.getRandomValues(new Uint8Array(16));
+      return Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
+    }
+
+    // 同期を始める。Firebaseの部品はここで初めてネットから読み込む（普段の起動を重くしないため）
+    async function startCloudSync() {
+      const statusEl = document.getElementById("familyStatus");
+      try {
+        const [appM, authM, fsM] = await Promise.all([
+          import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"),
+          import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js"),
+          import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"),
+        ]);
+        const app = appM.initializeApp(CLOUD_FIREBASE_CONFIG);
+        // 匿名サインイン: アカウント作成なしで「正規のアプリ利用者」の印だけもらう
+        await authM.signInAnonymously(authM.getAuth(app));
+        fsTools = fsM;
+        roomRef = fsM.doc(fsM.getFirestore(app), "rooms", roomId);
+
+        // 部屋の現状を1回読む。部屋がまだ無く、手元に記録があれば、手元の記録で部屋を作る
+        const first = await fsM.getDoc(roomRef);
+        cloudReady = true;
+        if (!first.exists() && payments.length > 0) await pushCloud();
+
+        // 以後、部屋の中身が変わるたびに手元へ反映する（家族が記録すると自分の画面もすぐ変わる）
+        fsM.onSnapshot(roomRef, (snap) => {
+          if (snap.metadata.hasPendingWrites) return; // 自分の書き込みの反響は無視
+          const data = snap.data();
+          if (data && Array.isArray(data.payments)) {
+            payments = data.payments;
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(payments)); // 圏外に備えて手元にも控える
+            render();
+          }
+        });
+        if (statusEl) statusEl.textContent = "同期中です。家族共有リンクを渡した相手と同じ記録を見て・書けます。";
+      } catch (err) {
+        if (statusEl) statusEl.textContent = "同期を開始できませんでした: " + err.message;
+      }
+    }
+
+    // 手元の記録を部屋へ書き込む
+    async function pushCloud() {
+      if (!roomRef || !fsTools) return;
+      await fsTools.setDoc(roomRef, { payments: payments, updatedAt: new Date().toISOString() });
+    }
+
+    // 「家族共有リンクをコピー」ボタン
+    document.getElementById("familyShareBtn").addEventListener("click", () => {
+      if (!roomId) return;
+      const url = location.origin + location.pathname + "#room=" + roomId;
+      navigator.clipboard.writeText(url).then(() => {
+        alert("家族共有リンクをコピーしました。\nこのリンクを知っている人は記録の閲覧と書き込みの両方ができます。家族以外に送らないでください。");
+      });
+    });
+
+    // 起動時: 部屋の合言葉を「リンク(#room=) → この端末の控え」の順で探す
+    if (!readonly) {
+      if (location.hash.startsWith("#room=")) {
+        roomId = location.hash.slice(6);
+        localStorage.setItem(STORAGE_KEY + "-room", roomId);
+        history.replaceState(null, "", location.pathname); // 合言葉をURL欄に残さない（肩越しに見られない）
+      } else {
+        roomId = localStorage.getItem(STORAGE_KEY + "-room");
+      }
+
+      if (CLOUD_FIREBASE_CONFIG) {
+        document.getElementById("familyCard").style.display = "block";
+        if (!roomId) {
+          // まだ部屋が無ければ、この端末が最初の1人として部屋の合言葉を作る
+          roomId = makeRoomId();
+          localStorage.setItem(STORAGE_KEY + "-room", roomId);
+        }
+        startCloudSync();
+      }
     }
   </script>
 </body>
