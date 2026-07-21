@@ -203,7 +203,7 @@
         <span id="paidyThisMonthTag" class="tag plan">---</span>
       </div>
       <div class="row">
-        <span>お母さんからの入金</span>
+        <span id="momThisMonthLabel">お母さんからの入金</span>
         <span id="momThisMonthTag" class="tag plan">---</span>
       </div>
     </div>
@@ -234,8 +234,22 @@
     </div>
   </section>
 
-  <!-- ======== 画面3: Paidy予定表 ======== -->
+  <!-- ======== 画面3: 予定表 ======== -->
   <section id="page-plan">
+    <div class="card">
+      <h2>お母さんの支払い計画（初回17,600円、以後月15,000円）</h2>
+      <table>
+        <thead>
+          <tr><th>回</th><th>月</th><th>目安</th><th>累計目安</th><th>状況</th></tr>
+        </thead>
+        <!-- 24行ぶんはJavaScriptが自動で作る -->
+        <tbody id="momPlanBody"></tbody>
+      </table>
+      <p style="font-size:12px; color:var(--sub); margin-top:10px;">
+        ※目安どおりでなくてOK。多め・少なめに払っても、入金の累計が「累計目安」に追いついていれば「済」になります。
+      </p>
+    </div>
+
     <div class="card">
       <h2>Paidy引き落とし予定（毎月27日・僕の口座から）</h2>
       <table>
@@ -304,6 +318,15 @@
     const PAIDY_MONTHLY = 11250;       // Paidy毎月の引き落とし額（270,000 ÷ 24）
     const PAIDY_COUNT = 24;            // 回数
     const PAIDY_START = { year: 2026, month: 7, day: 27 }; // 第1回の引き落とし日
+
+    /* 母の支払い計画（2026-07-21 母と合意）
+       初回だけ17,600円、以後は月15,000円。17,600 + 15,000×23回 = 362,600円ちょうどで、
+       Paidyの最終月(2028年6月)と同じ月に受け取りも終わる設計。
+       あくまで「目安」で、多め少なめに払ってもよい（残高は入金の実績だけで計算する） */
+    const MOM_PLAN_FIRST = 17600;   // 初回の目安額
+    const MOM_PLAN_MONTHLY = 15000; // 2回目以降の月額の目安
+    const MOM_PLAN_COUNT = 24;      // 24か月（2026年7月〜2028年6月）
+    const MOM_PLAN_START = { year: 2026, month: 7 }; // 計画の開始月
     const STORAGE_KEY = "macbook-repay-v1"; // localStorageの保存名
 
     /* ---- 【2】アプリの状態 ----
@@ -355,6 +378,37 @@
       return payments.reduce((sum, p) => sum + p.amount, 0);
     }
 
+    /* ---- 母の支払い計画まわりの道具 ---- */
+
+    // 計画の第n回（1〜24）の月を "YYYY-MM" で返す
+    function momPlanYm(n) {
+      const t = (MOM_PLAN_START.year * 12 + (MOM_PLAN_START.month - 1)) + (n - 1);
+      return Math.floor(t / 12) + "-" + String((t % 12) + 1).padStart(2, "0");
+    }
+
+    // 第n回の目安額（初回だけ17,600円、あとは15,000円）
+    function momPlanAmount(n) {
+      return n === 1 ? MOM_PLAN_FIRST : MOM_PLAN_MONTHLY;
+    }
+
+    // 第n回までの累計目安額
+    function momCumPlan(n) {
+      return MOM_PLAN_FIRST + (n - 1) * MOM_PLAN_MONTHLY;
+    }
+
+    // ある月("YYYY-MM")が計画の何か月目かを返す（開始前は0以下、終了後は24超になる）
+    function monthIndexOf(ym) {
+      const idx = Number(ym.slice(0, 4)) * 12 + (Number(ym.slice(5, 7)) - 1);
+      return idx - (MOM_PLAN_START.year * 12 + (MOM_PLAN_START.month - 1)) + 1;
+    }
+
+    // その月の末までに入金された実績の合計。
+    // 月ごとではなく「累計」で比べるのがポイントで、母がまとめ払いや前払いを
+    // しても、追いついてさえいれば計画どおり扱いになる
+    function actualThroughMonth(ym) {
+      return payments.filter(p => p.date.slice(0, 7) <= ym).reduce((s, p) => s + p.amount, 0);
+    }
+
     /* ---- 【5】画面を作り直す render ----
        データ(payments)を読んで、画面の各部品の中身を書き換えます。
        document.getElementById("名前") で HTML の部品をつかまえて、
@@ -392,16 +446,33 @@
         pTag.className = "tag plan";
       }
 
-      // 今月の母からの入金: ログの中に今月の日付があるか
-      const momPaidThisMonth = payments.some(p => p.date.slice(0, 7) === thisMonth);
+      // 今月の母からの入金: 計画の累計目安と実績の累計を比べる
       const mTag = document.getElementById("momThisMonthTag");
-      mTag.textContent = momPaidThisMonth ? "あり" : "まだ";
-      mTag.className = "tag " + (momPaidThisMonth ? "done" : "todo");
+      const mLabel = document.getElementById("momThisMonthLabel");
+      const nNow = monthIndexOf(thisMonth);
+      if (nNow >= 1 && nNow <= MOM_PLAN_COUNT) {
+        const target = momCumPlan(nNow);              // 今月末までに受け取っている目安
+        const got = actualThroughMonth(thisMonth);    // 実際に受け取った累計
+        mLabel.textContent = "お母さんからの入金（今月の目安 " + yen(momPlanAmount(nNow)) + "）";
+        if (got >= target) {
+          mTag.textContent = "順調";
+          mTag.className = "tag done";
+        } else {
+          mTag.textContent = "あと" + yen(target - got);
+          mTag.className = "tag todo";
+        }
+      } else {
+        // 計画期間の外（開始前・終了後）は、単純に今月入金があったかだけ見る
+        const momPaidThisMonth = payments.some(p => p.date.slice(0, 7) === thisMonth);
+        mLabel.textContent = "お母さんからの入金";
+        mTag.textContent = momPaidThisMonth ? "あり" : "まだ";
+        mTag.className = "tag " + (momPaidThisMonth ? "done" : "todo");
+      }
 
       /* --- ホーム: 完済ペース予測 --- */
       const paceEl = document.getElementById("paceText");
       if (paid <= 0) {
-        paceEl.textContent = "まだ入金がありません。参考: 月11,250円ペースなら完済は2029年3月ごろ、月15,000円なら2028年7月ごろです。";
+        paceEl.textContent = "まだ入金がありません。計画は初回" + yen(MOM_PLAN_FIRST) + "、以後 月" + yen(MOM_PLAN_MONTHLY) + "。計画どおりなら2028年6月にちょうど完済です。";
       } else if (remaining <= 0) {
         paceEl.textContent = "🎉 完済しました！総額 " + yen(TOTAL) + " を受け取り済みです。";
       } else {
@@ -440,6 +511,33 @@
             </div>
           </div>`).join("");
       }
+
+      /* --- 予定表画面: 母の支払い計画のテーブル --- */
+      let momRows = "";
+      for (let n = 1; n <= MOM_PLAN_COUNT; n++) {
+        const ym = momPlanYm(n);
+        const cumP = momCumPlan(n);
+        const cumA = actualThroughMonth(ym);
+        // 状況の判定: 累計で追いついていれば「済」。未来の月は「予定」。
+        // 過ぎた月・今月で足りていなければ、不足額を出す
+        let tag;
+        if (cumA >= cumP) {
+          tag = '<span class="tag done">済</span>';
+        } else if (ym > thisMonth) {
+          tag = '<span class="tag plan">予定</span>';
+        } else {
+          tag = '<span class="tag todo">あと' + (cumP - cumA).toLocaleString("ja-JP") + '円</span>';
+        }
+        momRows += `
+          <tr class="${ym < thisMonth ? "past" : ""}">
+            <td>${n}</td>
+            <td>${ym.replace("-", "/")}</td>
+            <td>${momPlanAmount(n).toLocaleString("ja-JP")}</td>
+            <td>${cumP.toLocaleString("ja-JP")}</td>
+            <td>${tag}</td>
+          </tr>`;
+      }
+      document.getElementById("momPlanBody").innerHTML = momRows;
 
       /* --- 予定表画面: Paidy 24回のテーブル --- */
       let rows = "";
