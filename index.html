@@ -703,7 +703,16 @@
        下の CLOUD_FIREBASE_CONFIG が null のあいだは、この節は何もしない
        （今まで通りの端末内保存のみで動く）。設定手順は V4-SETUP.md 参照。
        ========================================================== */
-    const CLOUD_FIREBASE_CONFIG = null; // Firebaseプロジェクト作成後、ここに設定を貼る
+    // Firebaseプロジェクト macbook-repay の接続情報（2026-07-21作成、東京リージョン）。
+    // これは「データ置き場の住所」であり、公開されてよい設計のもの（守りはルールと部屋の合言葉が担う）
+    const CLOUD_FIREBASE_CONFIG = {
+      apiKey: "AIzaSyArZYUNUnuXxFoWFl3CpUFRLJwwDlPZm1g",
+      authDomain: "macbook-repay.firebaseapp.com",
+      projectId: "macbook-repay",
+      storageBucket: "macbook-repay.firebasestorage.app",
+      messagingSenderId: "241439371256",
+      appId: "1:241439371256:web:6f7a6ea1788a4043d1f00d"
+    };
 
     let roomId = null;      // 参加中の部屋の合言葉
     let cloudReady = false; // 同期が動いているかの旗
